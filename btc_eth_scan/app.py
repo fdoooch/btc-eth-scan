@@ -17,7 +17,7 @@ ETHER_SCAN_API_KEY=os.getenv('ETHER_SCAN_API_KEY')
 ETHER_API_RATE_LIMIT = 5 # requests per second
 ETHER_MAX_PACK_SIZE = 20 # adresses in one request
 ETHER_SLEEP_INTERVAL = 1 / ETHER_API_RATE_LIMIT
-BTC_API_RATE_LIMIT = 10 # requests per second
+BTC_API_RATE_LIMIT = 5 # requests per second
 BTC_MAX_PACK_SIZE = 20 # adresses in one request
 BTC_SLEEP_INTERVAL = 1 / BTC_API_RATE_LIMIT
 
@@ -28,13 +28,13 @@ btc_semaphore = asyncio.Semaphore(BTC_API_RATE_LIMIT)
 
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname).3s | %(name)s -> %(funcName)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 fmt = logging.Formatter(fmt="%(asctime)s %(levelname).3s | %(name)s -> %(funcName)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-c_handler = logging.StreamHandler()
+# c_handler = logging.StreamHandler()
 f_handler = logging.FileHandler('btc-eth-scan.log')
 f_handler.setLevel(logging.WARNING)
-c_handler.setLevel(logging.DEBUG)
+# c_handler.setLevel(logging.DEBUG)
 logger = logging.getLogger("btc-eth-scan")
 
-logger.addHandler(c_handler)
+# logger.addHandler(c_handler)
 logger.addHandler(f_handler)
 
 for handler in logger.handlers:
@@ -51,9 +51,9 @@ async def get_ether_balance(address: str, client: httpx.AsyncClient):
 
 
 async def get_ether_balance_in_wei(addresses_pack: str, client: httpx.AsyncClient, semaphore: asyncio.Semaphore = ether_semaphore, sleep_interval: float = ETHER_SLEEP_INTERVAL):
-    address = (",".join(addresses_pack))
+    addresses = (",".join(addresses_pack))
     chain = "ETH"
-    url = f"https://api.etherscan.io/api?module=account&action=balancemulti&address={address}&tag=latest&apikey={ETHER_SCAN_API_KEY}"
+    url = f"https://api.etherscan.io/api?module=account&action=balancemulti&address={addresses}&tag=latest&apikey={ETHER_SCAN_API_KEY}"
 
     async with semaphore:
         start_time = time.time()
@@ -68,11 +68,11 @@ async def get_ether_balance_in_wei(addresses_pack: str, client: httpx.AsyncClien
         sleep_duration = max(0, sleep_interval - elapsed)
         await asyncio.sleep(sleep_duration)
         if response.status_code != 200:
-            logger.error(f"{chain} {address}, Error: {response.status_code} - {response.text}")
+            logger.error(f"{chain} {addresses}, Error: {response.status_code} - {response.text}")
             return None
         result = response.json()
         if result["status"] != "1":
-            logger.error(f"{chain} {address}, Error: {result}")
+            logger.error(f"{chain} {addresses}, Error: {result}")
             return None
         results = []
         for item in result.get("result"):
@@ -83,8 +83,35 @@ async def get_ether_balance_in_wei(addresses_pack: str, client: httpx.AsyncClien
         return results
     
 
-async def get_btc_balance(address: str, client: httpx.AsyncClient):
-    return {"chain": "BTC", "address": address, "balance": "0"}
+async def get_btc_balance(addresses_pack: str, client: httpx.AsyncClient, semaphore: asyncio.Semaphore = btc_semaphore, sleep_interval: float = BTC_SLEEP_INTERVAL):
+    addresses = ("|".join(addresses_pack))
+    chain = "BTC"
+    url = f"https://blockchain.info/multiaddr?active={addresses}"
+    print(url)
+    async with semaphore:
+        start_time = time.time()
+        await asyncio.sleep(sleep_interval - (time.time() - start_time))
+        try:
+            response = await client.get(url)
+        except httpx.RequestError as e:
+            logger.error(e)
+            await asyncio.sleep(sleep_interval)
+            return None
+        elapsed = time.time() - start_time
+        sleep_duration = max(0, sleep_interval - elapsed)
+        await asyncio.sleep(sleep_duration)
+        if response.status_code != 200:
+            logger.error(f"{chain} {addresses}, Error: {response.status_code} - {response.text}")
+            return None
+        result = response.json()
+        print(result)
+        results = []
+        for item in result.get("addresses"):
+            if item.get("final_balance") != 0:
+                results.append(
+                    {"chain": chain, "address": item.get("address"), "balance": str(item.get("final_balance"))}
+                )
+        return results
 
 
 async def main():
@@ -113,7 +140,13 @@ async def main():
                     )))
             
         for address_pack in range(0, len(btc_addresses_list), BTC_MAX_PACK_SIZE):
-            btc_address = btc_addresses_list[address_pack:address_pack + BTC_MAX_PACK_SIZE]
+            addresses = btc_addresses_list[address_pack:address_pack + BTC_MAX_PACK_SIZE]
+            tasks.append(asyncio.create_task(get_btc_balance(
+                        addresses_pack=addresses, 
+                        client=client, 
+                        semaphore=btc_semaphore, 
+                        sleep_interval=BTC_SLEEP_INTERVAL
+                    )))
 
         results = await asyncio.gather(*tasks)
         btc_results=set()
