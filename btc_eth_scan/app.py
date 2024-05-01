@@ -76,6 +76,7 @@ async def get_ether_balance_in_wei(addresses_pack: str, client: httpx.AsyncClien
             return None
         results = []
         for item in result.get("result"):
+            print(f"{chain}: {item.get('account')} -> {item.get('balance')}")
             if item.get("balance") != "0":
                 results.append(
                     {"chain": chain, "address": item.get("account"), "balance": item.get("balance")}
@@ -105,6 +106,7 @@ async def get_btc_balance(addresses_pack: str, client: httpx.AsyncClient, semaph
         result = response.json()
         results = []
         for address, data in result.items():
+            print(f"{chain}: {address} -> {data.get('final_balance')}")
             if data.get("final_balance") != 0:
                 results.append(
                     {"chain": chain, "address": address, "balance": str(data.get("final_balance"))}
@@ -129,6 +131,7 @@ async def main():
         tasks = []
         eth_addresses_list = list(eth_addresses)
         btc_addresses_list = list(btc_addresses)
+        print(f"Получено для проверки {len(eth_addresses_list)} ETH и {len(btc_addresses_list)} BTC")
         for address_pack in range(0, len(eth_addresses_list), ETHER_MAX_PACK_SIZE):
             addresses = eth_addresses_list[address_pack:address_pack + ETHER_MAX_PACK_SIZE]
             tasks.append(asyncio.create_task(get_ether_balance_in_wei(
