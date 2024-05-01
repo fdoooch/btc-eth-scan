@@ -11,6 +11,8 @@ btc_results_filename = "btc_results.txt"
 eth_results_filename = "eth_results.txt"
 results_filename = "results.txt"
 
+VERBOSE_MODE_ON = True
+
 
 ETHER_SCAN_API_KEY=os.getenv('ETHER_SCAN_API_KEY')
 
@@ -76,7 +78,8 @@ async def get_ether_balance_in_wei(addresses_pack: str, client: httpx.AsyncClien
             return None
         results = []
         for item in result.get("result"):
-            print(f"{chain}: {item.get('account')} -> {item.get('balance')}")
+            if VERBOSE_MODE_ON:
+                print(f"{chain}: {item.get('account')} -> {item.get('balance')}")
             if item.get("balance") != "0":
                 results.append(
                     {"chain": chain, "address": item.get("account"), "balance": item.get("balance")}
@@ -106,7 +109,8 @@ async def get_btc_balance(addresses_pack: str, client: httpx.AsyncClient, semaph
         result = response.json()
         results = []
         for address, data in result.items():
-            print(f"{chain}: {address} -> {data.get('final_balance')}")
+            if VERBOSE_MODE_ON:
+                print(f"{chain}: {address} -> {data.get('final_balance')}")
             if data.get("final_balance") != 0:
                 results.append(
                     {"chain": chain, "address": address, "balance": str(data.get("final_balance"))}
