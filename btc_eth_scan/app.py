@@ -86,7 +86,7 @@ async def get_ether_balance_in_wei(addresses_pack: str, client: httpx.AsyncClien
 async def get_btc_balance(addresses_pack: str, client: httpx.AsyncClient, semaphore: asyncio.Semaphore = btc_semaphore, sleep_interval: float = BTC_SLEEP_INTERVAL):
     addresses = ("|".join(addresses_pack))
     chain = "BTC"
-    url = f"https://blockchain.info/multiaddr?active={addresses}"
+    url = f"https://blockchain.info/balance?active={addresses}"
     print(url)
     async with semaphore:
         start_time = time.time()
