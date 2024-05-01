@@ -87,7 +87,6 @@ async def get_btc_balance(addresses_pack: str, client: httpx.AsyncClient, semaph
     addresses = ("|".join(addresses_pack))
     chain = "BTC"
     url = f"https://blockchain.info/balance?active={addresses}"
-    print(url)
     async with semaphore:
         start_time = time.time()
         await asyncio.sleep(sleep_interval - (time.time() - start_time))
@@ -104,17 +103,17 @@ async def get_btc_balance(addresses_pack: str, client: httpx.AsyncClient, semaph
             logger.error(f"{chain} {addresses}, Error: {response.status_code} - {response.text}")
             return None
         result = response.json()
-        print(result)
         results = []
-        for item in result.get("addresses"):
-            if item.get("final_balance") != 0:
+        for address, data in result.items():
+            if data.get("final_balance") != 0:
                 results.append(
-                    {"chain": chain, "address": item.get("address"), "balance": str(item.get("final_balance"))}
+                    {"chain": chain, "address": address, "balance": str(data.get("final_balance"))}
                 )
         return results
 
 
 async def main():
+    start = time.time()
     async with httpx.AsyncClient() as client:
         eth_addresses = set()
         btc_addresses = set()
@@ -167,6 +166,9 @@ async def main():
         with open(results_filename, 'w') as f:
             for address in results:
                 f.write(f"{address}\n")
+    finish = time.time()
+    print(f"Cкрипт завершил работу.Время работы: {finish - start} с")
+    print(f"Проверено {len(eth_addresses)} ETH адресов и {len(btc_addresses)} BTC адресов")
 
 
 if __name__ == "__main__":
