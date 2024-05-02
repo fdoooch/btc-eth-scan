@@ -116,26 +116,38 @@ async def get_btc_balance(addresses_pack: str, client: httpx.AsyncClient, semaph
                     {"chain": chain, "address": address, "balance": str(data.get("final_balance"))}
                 )
         return results
+    
 
-
-async def main():
+async def main_cycle() -> None:
+    print(f"\n\nЗапуск нового цикла. Время запуска: {time.strftime('%X')}")
     start = time.time()
-    async with httpx.AsyncClient() as client:
-        eth_addresses = set()
-        btc_addresses = set()
+    eth_addresses = set()
+    btc_addresses = set()
 
-        with open(SOURCE_FILENAME) as f:
-            for line in f:
-                if "BTC address" in line:
-                    btc_address = line.split(": ")[1].strip()
-                    btc_addresses.add(btc_address)                   
-                elif "ETH address" in line:
-                    eth_address = line.split(": ")[1].strip()
-                    eth_addresses.add(eth_address)
-        tasks = []
-        eth_addresses_list = list(eth_addresses)
-        btc_addresses_list = list(btc_addresses)
-        print(f"Получено для проверки {len(eth_addresses_list)} ETH и {len(btc_addresses_list)} BTC")
+    with open(SOURCE_FILENAME) as f:
+        for line in f:
+            if "BTC address" in line:
+                btc_address = line.split(": ")[1].strip()
+                btc_addresses.add(btc_address)                   
+            elif "ETH address" in line:
+                eth_address = line.split(": ")[1].strip()
+                eth_addresses.add(eth_address)
+    eth_addresses_list = list(eth_addresses)
+    btc_addresses_list = list(btc_addresses)
+    print(f"Получено для проверки {len(eth_addresses_list)} ETH и {len(btc_addresses_list)} BTC")
+    addresses_with_balance = await check_balances(eth_addresses_list, btc_addresses_list)
+    with open(results_filename, 'w') as f:
+            for address in addresses_with_balance:
+                f.write(f"{address}\n")
+    finish = time.time()
+    print(f"Cкрипт завершил работу.Время работы: {finish - start} с")
+    print(f"Проверено {len(eth_addresses)} ETH адресов и {len(btc_addresses)} BTC адресов")
+    print(f"Найдено {len(addresses_with_balance)} адресов с балансом")
+
+
+async def check_balances(eth_addresses_list: list, btc_addresses_list: list) -> list:
+    tasks = []
+    async with httpx.AsyncClient() as client:
         for address_pack in range(0, len(eth_addresses_list), ETHER_MAX_PACK_SIZE):
             addresses = eth_addresses_list[address_pack:address_pack + ETHER_MAX_PACK_SIZE]
             tasks.append(asyncio.create_task(get_ether_balance_in_wei(
@@ -170,13 +182,16 @@ async def main():
                         logger.error(f"Unknown chain: {item}")
                         continue
         results = eth_results.union(btc_results)
-        with open(results_filename, 'w') as f:
-            for address in results:
-                f.write(f"{address}\n")
-    finish = time.time()
-    print(f"Cкрипт завершил работу.Время работы: {finish - start} с")
-    print(f"Проверено {len(eth_addresses)} ETH адресов и {len(btc_addresses)} BTC адресов")
+    return list(results)
+
+
+async def main():
+    while True:
+        await main_cycle()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Script interrupted by user")
